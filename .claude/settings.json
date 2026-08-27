@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx *)",
+      "Bash(curl -s -X POST http://localhost:3900/api/heartbeat)",
+      "Bash(kill %1)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(lsof -ti:3900)",
+      "Bash(xargs kill -9)",
+      "Bash(curl -s -X POST http://localhost:3900/api/rental/analyze -H 'Content-Type: application/json' -d '{\"contractText\":\"房屋租赁合同\\\\n甲方（出租方）：张三\\\\n乙方（承租方）：李四\\\\n\\\\n第一条 租金条款\\\\n每月租金为人民币3000元整，按月支付。\\\\n\\\\n第二条 押金条款\\\\n乙方需支付押金6000元，退租时按实际情况扣除。\\\\n\\\\n第三条 维修责任\\\\n房屋维修费用由乙方承担。\\\\n\\\\n第四条 解约条款\\\\n提前解约需支付三个月租金作为违约金。\"}')",
+      "Bash(/Users/lxiaonuo/Desktop/travelCode/travel-h5/node_modules/.bin/tsc -p /Users/lxiaonuo/Desktop/travelCode/travel-h5/tsconfig.json --noEmit)",
+      "Bash(node ./node_modules/vite/bin/vite.js build)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(lsof -ti:5212)",
+      "Bash(xargs kill)"
+    ]
+  }
+}
