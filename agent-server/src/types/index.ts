@@ -97,10 +97,9 @@ export interface ClassificationResult {
 // ============ SSE 事件类型 ============
 
 export interface SSEEvent {
-  type: 'agent_start' | 'agent_think' | 'agent_chunk' | 'agent_done' | 'agent_retry' | 'confirm_needed' | 'workflow_done' | 'input_rejected' | 'chat_reply' | 'chat_chunk' | 'error';
+  type: 'agent_start' | 'agent_chunk' | 'agent_done' | 'agent_retry' | 'confirm_needed' | 'workflow_done' | 'input_rejected' | 'chat_reply' | 'chat_chunk' | 'error';
   agent?: string;
   message?: string;
-  thought?: string;
   content?: string;
   data?: unknown;
   threadId?: string;

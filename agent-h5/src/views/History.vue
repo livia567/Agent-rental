@@ -17,6 +17,7 @@ const router = useRouter()
 const store = useWorkshopStore()
 const records = ref<HistoryItem[]>([])
 const loading = ref(true)
+const onClickLeft = () => history.back();
 
 onMounted(async () => {
   try {
@@ -58,20 +59,24 @@ function verdictText(report: FinalReport | null) {
 
 <template>
   <div class="page-container">
-    <van-nav-bar title="历史分析" />
+    <van-nav-bar title="历史分析" left-arrow  @click-left="onClickLeft" >
+      <template #left>
+        <van-icon name="arrow-left" size="16" color="#323233" />
+      </template>
+    </van-nav-bar>
     <div class="page-content">
       <van-loading v-if="loading" class="loading" />
       <van-empty v-else-if="!records.length" description="暂无历史分析记录" />
       <div v-else class="history-list">
         <button v-for="item in records" :key="item.id" class="history-item" @click="openRecord(item.id)">
-          <div class="history-main">
-            <div class="preview">{{ item.contractPreview }}</div>
-            <div class="date">{{ new Date(item.createdAt).toLocaleString('zh-CN') }}</div>
-          </div>
-          <div class="history-result">
-            <span>{{ verdictText(item.finalReport) }}</span>
-            <strong>{{ item.finalReport?.overallScore ?? '--' }}</strong>
-            <van-icon name="arrow" />
+          <div class="preview">{{ item.contractPreview }}</div>
+          <div class="history-meta">
+            <span class="date">{{ new Date(item.createdAt).toLocaleDateString('zh-CN') }}</span>
+            <span class="result">
+              <span class="verdict">{{ verdictText(item.finalReport) }}</span>
+              <strong>{{ item.finalReport?.overallScore ?? '--' }}</strong>
+              <van-icon name="arrow" />
+            </span>
           </div>
         </button>
       </div>
@@ -81,11 +86,11 @@ function verdictText(report: FinalReport | null) {
 
 <style scoped>
 .loading { display: block; margin: 40px auto; }
-.history-list { display: grid; gap: 12px; }
-.history-item { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-primary); text-align: left; color: inherit; }
-.history-main { min-width: 0; }
+.history-list { display: grid; gap: 10px; }
+.history-item { width: 100%; display: block; padding: 14px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-primary); text-align: left; color: inherit; }
 .preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
-.date { margin-top: 6px; color: var(--color-text-tertiary); font-size: 12px; }
-.history-result { display: flex; align-items: center; flex-shrink: 0; gap: 8px; color: var(--color-text-secondary); font-size: 12px; }
-.history-result strong { color: var(--color-text-primary); font-size: 18px; }
+.history-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.date { color: var(--color-text-tertiary); font-size: 12px; }
+.result { display: flex; align-items: center; flex-shrink: 0; gap: 6px; color: var(--color-text-secondary); font-size: 12px; }
+.result strong { color: var(--color-text-primary); font-size: 16px; }
 </style>

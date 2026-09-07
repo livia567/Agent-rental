@@ -47,8 +47,6 @@ function callbacksFor(
       stream.sendAgentEvent({ type: "agent_done", agent, data }),
     onChunk: (content: string) =>
       stream.sendAgentEvent({ type: "agent_chunk", agent: current, content }),
-    onThink: (thought: string) =>
-      stream.sendAgentEvent({ type: "agent_think", agent: current, thought }),
     onValidationFail: (_schemaName: string, issues: string, attempt: number) =>
       stream.sendAgentEvent({
         type: "agent_retry",

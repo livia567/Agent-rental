@@ -25,6 +25,8 @@ onMounted(() => {
   }, 600)
 })
 
+const onClickLeft = () => history.back();
+
 const goHome = () => {
   store.reset()
   router.push('/')
@@ -34,11 +36,11 @@ const goHome = () => {
 <template>
   <div class="page-container">
     <div class="page-header">
-      <van-nav-bar
-        title="合同评审报告"
-        left-text="返回"
-        @click-left="goHome"
-      />
+      <van-nav-bar title="合同评审报告" left-arrow  @click-left="onClickLeft" >
+      <template #left>
+        <van-icon name="arrow-left" size="16" color="#323233" />
+      </template>
+    </van-nav-bar>
     </div>
 
     <div class="page-content">
@@ -68,7 +70,6 @@ const goHome = () => {
           :report="store.finalReport"
           :risk-clauses="store.riskAnnotatedClauses"
           :negotiation-tips="store.negotiationTips"
-          @back="goHome"
         />
 
       </template>

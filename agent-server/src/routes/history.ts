@@ -10,7 +10,7 @@ router.get("/", (req, res) => {
     const result = r.resultJson ? JSON.parse(r.resultJson) : null;
     return {
       id: r.id,
-      contractPreview: r.contractText.replace(/\s+/g, " ").slice(0, 48),
+      contractPreview: r.contractText.replace(/\s+/g, " ").slice(0, 9),
       createdAt: r.createdAt,
       finalReport: result?.finalReport ?? null,
     };

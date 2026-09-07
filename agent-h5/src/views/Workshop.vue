@@ -6,6 +6,7 @@ import { useWorkshopStore } from '../stores/workshop'
 import { fetchStream } from '../utils/request'
 import type { SSEEvent } from '../types'
 import { CLAUSE_TYPE_LABELS } from '../types'
+import { useAgentStream } from '../composables/useAgentStream'
 import AnalysisProgress from '../components/AnalysisProgress.vue'
 import ReportCard from '../components/ReportCard.vue'
 
@@ -13,91 +14,21 @@ import ReportCard from '../components/ReportCard.vue'
 const router = useRouter()
 const store = useWorkshopStore()
 
-const currentAgentOutput = ref('')
-const currentThinking = ref('')
-const thinkingContentRef = ref<HTMLPreElement | null>(null)
+// 流式结论展示：rawStream 累积 agent_chunk，finalText 存 agent_done 渲染结果
+const { displayedOutput, onAgentStart, onAgentChunk, onAgentRetry, onAgentDone } = useAgentStream()
 const outputContentRef = ref<HTMLPreElement | null>(null)
 const showClauseReview = ref(false)
 const feedbackText = ref('')
 const showFeedback = ref(false)
 const abortController = ref<AbortController | null>(null)
-
-// 格式化思考内容：只保留中文和标点符号
-// 思考内容更新时自动滚到底部
-watch(currentThinking, async () => {
-  await nextTick()
-  if (thinkingContentRef.value) {
-    thinkingContentRef.value.scrollTop = thinkingContentRef.value.scrollHeight
-  }
-})
+const requestSeq = ref(0)
 
 // 分析结论更新时自动滚到底部
-watch(currentAgentOutput, async () => {
+watch(displayedOutput, async () => {
   await nextTick()
   if (outputContentRef.value) {
     outputContentRef.value.scrollTop = outputContentRef.value.scrollHeight
   }
-})
-
-const formattedThinking = computed(() => {
-  const raw = currentThinking.value
-  if (!raw) return ''
-  return raw
-     .replace(/[^一-鿿　-〿＀-￯，。！？；：、\n]/g, '')
-     .replace(/\s/g, '')  
-})
-
-// 根据 agent 类型格式化 JSON 输出，只展示有意义的文本内容
-function formatOutput(data: unknown, agent: string): string {
-  if (!data || typeof data !== 'object') return ''
-  const d = data as Record<string, unknown>
-
-  if (agent === 'clause_splitter' && Array.isArray(d.clauses)) {
-    return d.clauses.map((c: any, i: number) =>
-      `【${c.title || `条款${i + 1}`}】\n${c.originalText || ''}`
-    ).join('\n\n')
-  }
-  if (agent === 'risk_analyzer' && Array.isArray(d.risks)) {
-    return d.risks.map((r: any) =>
-      `建议：${r.suggestion || ''}`
-    ).join('\n\n')
-  }
-  if (agent === 'negotiation_advisor' && Array.isArray(d.tips)) {
-    return d.tips.map((t: any) =>
-      `「${t.clauseTitle || ''}」${t.script || ''}`
-    ).join('\n\n')
-  }
-  if (agent === 'final_reviewer' && d.finalReport) {
-    const r = d.finalReport as Record<string, unknown>
-    return [r.summary, r.verdictReason, (r.highlights as string[])?.join('、')].filter(Boolean).join('\n\n')
-  }
-
-  // fallback：递归提取所有字符串值
-  const extract = (obj: unknown): string => {
-    if (typeof obj === 'string') return obj
-    if (Array.isArray(obj)) return obj.map(extract).filter(Boolean).join('\n')
-    if (obj && typeof obj === 'object') return Object.values(obj as Record<string, unknown>).map(extract).filter(Boolean).join('\n')
-    return ''
-  }
-  return extract(data)
-}
-
-const formattedAgentOutput = computed(() => {
-  const raw = currentAgentOutput.value
-  if (!raw) return ''
-  try { return formatOutput(JSON.parse(raw), store.activeAgent) }
-    catch {
-      return raw
-        .replace(/[\[\]{}"]/g, '')
-        .replace(/[a-z_][a-z0-9_]*\s*:\s*/gi, '')
-        .replace(/\b[a-z][a-z0-9]{0,14}\b/gi, '')
-        .replace(/[,;]{2,}/g, ',')
-        .replace(/^[\s,;]+|[\s,;]+$/g, '')
-        .replace(/\s*,\s*/g, '\n')
-        .replace(/^\d+\s*$/gm, '')
-        .replace(/\n{2,}/g, '\n')
-        .trim() || raw.replace(/^[\[\{]\s*/, '').slice(0, 80) + '...'
-    }
 })
 
 // Agent 角色清单
@@ -143,25 +74,20 @@ const handleSSEEvent = (event: SSEEvent) => {
       if (agentList.some(a => a.key === event.agent)) {
         store.setActiveAgent(event.agent!)
       }
-      currentAgentOutput.value = ''
-      currentThinking.value = ''
-      break
-
-    case 'agent_think':
-      currentThinking.value += event.thought || ''
-      break
-
-    case 'agent_retry':
-      currentAgentOutput.value = ''
-      currentThinking.value = ''
+      onAgentStart()
       break
 
     case 'agent_chunk':
-      currentAgentOutput.value += event.content || ''
+      onAgentChunk(event.content || '')
+      break
+
+    case 'agent_retry':
+      onAgentRetry()
       break
 
     case 'agent_done':
       store.setAgentStatus(event.agent!, 'done')
+      onAgentDone(event.agent!, event.data)
       if (event.agent === 'ocr_extractor') {
         // OCR 完成，不额外保存
       } else if (event.agent === 'clause_splitter') {
@@ -175,7 +101,7 @@ const handleSSEEvent = (event: SSEEvent) => {
         store.setNegotiationTips(event.data?.negotiationTips || [])
         store.setStep('final_review')
       }
-      // 保留 currentAgentOutput/currentThinking，等下一个 agent_start 时清
+      // 保留 finalText，等下一个 agent_start 时清
       break
 
     case 'confirm_needed':
@@ -207,6 +133,16 @@ const handleSSEEvent = (event: SSEEvent) => {
   }
 }
 
+// 启动一次流式请求：先中断上一次，再用 requestSeq 忽略被中断的旧请求的迟到事件，
+// 保证页面状态只被当前请求更新，防止过期响应污染 UI。
+function startStream(url: string, data: Record<string, unknown>, onError: (msg: string) => void) {
+  abortController.value?.abort()
+  const seq = ++requestSeq.value
+  return fetchStream(url, data, (e) => {
+    if (seq === requestSeq.value) handleSSEEvent(e)
+  }, () => {}, onError)
+}
+
 // 开始分析
 const startAnalysis = async () => {
   const text = store.contractText
@@ -217,7 +153,6 @@ const startAnalysis = async () => {
     return
   }
 
-  if (abortController.value) abortController.value.abort()
   store.reset()
   store.contractText = text
   if (img.length > 0) store.imageBase64 = img
@@ -225,11 +160,9 @@ const startAnalysis = async () => {
   showLoadingOverlay.value = true
 
   try {
-    abortController.value = await fetchStream(
+    abortController.value = await startStream(
       'rental/analyze',
       { contractText: text, imageBase64: img },
-      handleSSEEvent,
-      () => { /* complete handled by workflow_done event */ },
       (msg) => {
         showLoadingOverlay.value = false
         store.setError(msg)
@@ -252,16 +185,11 @@ const handleClauseConfirm = async () => {
   showFeedback.value = false
   if (!store.confirmData) return
 
-  if (abortController.value) {
-    abortController.value.abort()
-  }
   store.setError(null)
   try {
-    abortController.value = await fetchStream(
+    abortController.value = await startStream(
       'rental/confirm',
       { threadId: store.confirmData.threadId },
-      handleSSEEvent,
-      () => { /* complete handled by workflow_done event */ },
       (msg) => {
         showLoadingOverlay.value = false
         store.setError(msg)
@@ -286,14 +214,11 @@ const handleClauseCancel = async () => {
   showClauseReview.value = false
   showFeedback.value = false
   if (!store.confirmData) return
-  if (abortController.value) abortController.value.abort()
   store.setError(null)
   try {
-    abortController.value = await fetchStream(
+    abortController.value = await startStream(
       'rental/reject',
       { threadId: store.confirmData.threadId, feedback: feedbackText.value },
-      handleSSEEvent,
-      () => {},
       (msg) => { showLoadingOverlay.value = false; store.setError(msg); showToast(msg) }
     )
   } catch (err: any) {
@@ -353,12 +278,11 @@ onUnmounted(() => {
   <div class="page-container">
     <div class="page-header">
       <van-nav-bar
-        :title="store.analysisPhase === 'done' ? '合同评审报告' : '合同分析中（请勿退出）...'"
+        :title="store.analysisPhase === 'done' ? '合同评审报告' : '合同分析中（请勿退出）'"
         @click-left="handleBack"
       >
         <template #left>
           <van-icon name="arrow-left" size="16" color="#323233" />
-          <span>返回</span>
         </template>
       </van-nav-bar>
     </div>
@@ -413,18 +337,12 @@ onUnmounted(() => {
             <span v-else class="agent-panel-done" style="font-size: 14px;">完成</span>
           </div>
 
-          <div v-if="currentThinking" class="thinking-bubble">
-            <div class="thinking-label">💭 思考过程</div>
-            <pre ref="thinkingContentRef" class="thinking-content">{{ formattedThinking }}</pre>
+          <div v-if="displayedOutput" class="output-area">
+            <pre ref="outputContentRef" class="output-content">{{ displayedOutput }}<span v-if="store.agentStatuses[store.activeAgent] === 'active'" class="cursor-blink">▌</span></pre>
           </div>
 
-          <div v-if="currentAgentOutput" class="output-area">
-            <div class="output-label"><van-icon name="description-o" size="16px" /> <span>分析结论：</span></div>
-            <pre ref="outputContentRef" class="output-content">{{ formattedAgentOutput }}<span v-if="store.agentStatuses[store.activeAgent] === 'active'" class="cursor-blink">▌</span></pre>
-          </div>
-
-          <div v-if="!currentThinking && !currentAgentOutput && store.agentStatuses[store.activeAgent] === 'active'" class="waiting-hint">
-            正在思考中...
+          <div v-if="!displayedOutput && store.agentStatuses[store.activeAgent] === 'active'" class="waiting-hint">
+            正在分析中...
           </div>
         </div>
 
@@ -541,38 +459,6 @@ onUnmounted(() => {
   max-height: 25em;         /* 约15行 */
   margin: 0;
   font-family: inherit;
-}
-
-/* 思考气泡 */
-.thinking-label {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin-bottom: 8px;
-  font-style: normal;
-}
-.thinking-content {
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-y: auto;
-  max-height: 8em;          /* 约5行 */
-  margin: 0;
-  font-family: inherit;
-  color: var(--color-text-secondary);
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
-}
-
-.thinking-content::-webkit-scrollbar {
-  width: 3px;
-}
-.thinking-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-.thinking-content::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 3px;
 }
 
 .waiting-hint {

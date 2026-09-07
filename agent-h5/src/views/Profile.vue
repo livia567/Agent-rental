@@ -35,7 +35,7 @@ async function logout() {
 
       <!-- 项目介绍 -->
       <div class="hero-section">
-        <h1 class="hero-title">🏠 租房避坑</h1>
+        <h1 class="hero-title">租房避坑</h1>
         <p class="hero-subtitle">租房合同智能审查系统</p>
       </div>
 
@@ -54,8 +54,8 @@ async function logout() {
           <span class="tech-tag">Pinia</span>
           <span class="tech-tag">Vant4</span>
 
-          <span class="tech-tag">marked</span>
-          <span class="tech-tag">Express</span>
+          <span class="tech-tag">Nodejs</span>
+          <span class="tech-tag">SQLite</span>
           <span class="tech-tag">LangChain</span>
           <span class="tech-tag">SSE</span>
           <span class="tech-tag">腾讯云OCR</span>
@@ -67,7 +67,7 @@ async function logout() {
       <div class="card">
         <div class="version-item">
           <span>版本</span>
-          <span class="version-value">v2.0.0</span>
+          <span class="version-value">v2.0.1</span>
         </div>
       </div>
 

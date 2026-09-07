@@ -17,7 +17,6 @@ import {
 /** SSE 流式回调 */
 export interface StreamCallbacks {
   onChunk: (chunk: string) => void;
-  onThink?: (thought: string) => void;
   /** Schema 校验失败（用于向前端推送重试提示） */
   onValidationFail?: (schemaName: string, issues: string, attempt: number) => void;
   /** 节点开始/结束，用于向前端推送 agent_start / agent_done */
@@ -158,15 +157,12 @@ export class RentalWorkflow {
   private async streamAndCollect(
     messages: (SystemMessage | HumanMessage)[],
     onChunk: (chunk: string) => void,
-    onThink?: (thought: string) => void,
     responseFormat?: object
   ): Promise<string> {
     const stream = await this.llm.stream(messages,
       responseFormat ? { response_format: responseFormat } as any : undefined);
     let fullResponse = "";
     for await (const chunk of stream) {
-      const reasoning = (chunk.additional_kwargs as any)?.reasoning_content;
-      if (typeof reasoning === 'string' && reasoning.trim()) onThink?.(reasoning);
       const content = chunk.content as string || "";
       if (!content.trim()) continue;
       fullResponse += content;
@@ -198,7 +194,7 @@ export class RentalWorkflow {
           : "")),
       ];
 
-      const raw = await this.streamAndCollect(messages, cb.onChunk, cb.onThink, responseFormat);
+      const raw = await this.streamAndCollect(messages, cb.onChunk, responseFormat);
 
       let parsed: unknown;
       try {

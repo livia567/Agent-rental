@@ -120,6 +120,8 @@ export async function fetchStream(
 
     return controller;
   } catch (err: any) {
+    // 主动取消（AbortController.abort）不是错误，静默返回，避免误触发错误提示
+    if (err?.name === "AbortError") return controller;
     onError(err.message || "网络请求失败");
     return controller;
   }

@@ -59,10 +59,9 @@ export interface AnalysisState {
 // ============ SSE 事件类型 ============
 
 export interface SSEEvent {
-  type: 'agent_start' | 'agent_think' | 'agent_chunk' | 'agent_done' | 'agent_retry' | 'confirm_needed' | 'workflow_done' | 'error' | 'input_rejected' | 'chat_reply' | 'chat_chunk';
+  type: 'agent_start' | 'agent_chunk' | 'agent_done' | 'agent_retry' | 'confirm_needed' | 'workflow_done' | 'error' | 'input_rejected' | 'chat_reply' | 'chat_chunk';
   agent?: string;
   message?: string;
-  thought?: string;
   content?: string;
   data?: any;
   threadId?: string;
